@@ -380,8 +380,6 @@ def main():
     )
     parser.add_argument("--output", default="multi_agv_plan.json", help="Output file name")
     parser.add_argument("--format", choices=["json", "txt"], default="json", help="Output format")
-    parser.add_argument("--submit", action="store_true", help="Submit plan to API after generation")
-    parser.add_argument("--nickname", help="Nickname for API submission (required with --submit)")
     parser.add_argument(
         "--agv-speeds",
         help="AGV speeds in format 'AGV1:speed1,AGV2:speed2' (default: 1.0 for all)",
@@ -481,64 +479,6 @@ def main():
             for node, time1, time2 in warning["collisions"]:
                 print(f"    - At node {node}: {warning['agv1']} at {time1:.2f}, {warning['agv2']} at {time2:.2f}")
 
-    # Submit to API if requested
-    if args.submit:
-        if not args.nickname:
-            print("\nError: --nickname is required when using --submit")
-            sys.exit(1)
-
-        print(f"\nSubmitting plan to API with nickname: {args.nickname}")
-        submit_multi_agv_plan(plan, args.nickname, args.url)
-
-
-def submit_multi_agv_plan(plan_data, nickname, base_url):
-    """Submit multi-AGV plan to the API"""
-    import requests
-
-    # Extract base URL
-    base_url = base_url.split("/api/")[0]
-    submit_url = f"{base_url}/api/submit-plan/"
-
-    # Convert multi-AGV plan to submission format
-    # Combine all movements from all AGVs
-    all_movements = []
-
-    for agv in plan_data["agv_plans"]:
-        # Add AGV identifier to movements
-        for movement in agv["movements"]:
-            movement_copy = movement.copy()
-            movement_copy["agv_id"] = agv["agv_id"]
-            all_movements.append(movement_copy)
-
-    # Use first AGV's start node as the plan start
-    start_node = plan_data["agv_plans"][0]["start_node"]
-
-    submission_data = {
-        "nickname": nickname,
-        "map_id": plan_data["map_id"],
-        "plan": {
-            "start_node": start_node,
-            "movements": all_movements,
-            "is_multi_agv": True,
-            "agv_count": plan_data["agv_count"],
-        },
-    }
-
-    try:
-        response = requests.post(submit_url, json=submission_data)
-
-        if response.status_code == 201:
-            result = response.json()
-            print(f"Plan submitted successfully!")
-            print(f"Submission ID: {result.get('submission_id')}")
-            print(f"Total distance: {result['total_distance']:.2f} (lower is better)")
-            print(f"Total movements: {result['total_movements']}")
-            print(f"Valid movements: {result['valid_movements']}/{result['total_movements']}")
-        else:
-            print(f"Submission failed: {response.status_code}")
-            print(response.text)
-    except Exception as e:
-        print(f"Error submitting plan: {e}")
 
 
 if __name__ == "__main__":
